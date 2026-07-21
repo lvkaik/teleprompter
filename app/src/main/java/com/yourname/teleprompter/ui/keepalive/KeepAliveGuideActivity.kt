@@ -38,6 +38,7 @@ class KeepAliveGuideActivity : ComponentActivity() {
     }
 }
 
+@OptIn(androidx.compose.material3.ExperimentalMaterial3Api::class)
 @Composable
 private fun KeepAliveScreen() {
     val ctx = LocalContext.current

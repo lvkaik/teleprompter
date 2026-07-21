@@ -122,13 +122,7 @@ class FloatingWindowService : Service() {
         setupResizeHandles()
         setupButtons()
 
-        // 默认文稿（由外部通过 Intent 注入）。显式 getIntent() 避开属性歧义。
-        getIntent()?.getStringExtra(EXTRA_SCRIPT_CONTENT)?.let { textView.text = it }
-        getIntent()?.getFloatExtra(EXTRA_FONT_SP, 22f)?.let {
-            textView.textSize = it
-        }
-        getIntent()?.getFloatExtra(EXTRA_SPEED, 30f)?.let { speedPxPerSec = it }
-
+        // 文稿内容由 onStartCommand 注入；此处只创建 AutoScroller
         scroller = AutoScroller(scrollView) { speedPxPerSec }
     }
 
@@ -138,7 +132,17 @@ class FloatingWindowService : Service() {
             ACTION_PAUSE -> scroller?.stop()
             ACTION_RESUME -> scroller?.start()
             else -> {
-                intent?.getStringExtra(EXTRA_SCRIPT_CONTENT)?.let { textView.text = it }
+                // 首次启动 / 普通刷新：注入文稿、字号、速度
+                val content = intent?.getStringExtra(EXTRA_SCRIPT_CONTENT)
+                if (!content.isNullOrEmpty()) {
+                    textView.text = content
+                }
+                if (intent != null && intent.hasExtra(EXTRA_FONT_SP)) {
+                    textView.textSize = intent.getFloatExtra(EXTRA_FONT_SP, textView.textSize)
+                }
+                if (intent != null && intent.hasExtra(EXTRA_SPEED)) {
+                    speedPxPerSec = intent.getFloatExtra(EXTRA_SPEED, speedPxPerSec)
+                }
             }
         }
         return START_STICKY
