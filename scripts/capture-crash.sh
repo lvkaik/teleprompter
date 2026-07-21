@@ -21,16 +21,28 @@ echo " 包名: $PKG"
 echo "=========================================="
 echo ""
 echo "[1/4] 检查 adb ..."
-if ! command -v adb >/dev/null 2>&1; then
+# 多源探测 adb：PATH -> ~/adb-tools/adb -> Android Studio 自带
+ADB=""
+if command -v adb >/dev/null 2>&1; then
+  ADB="$(command -v adb)"
+elif [ -x "$HOME/adb-tools/adb" ]; then
+  ADB="$HOME/adb-tools/adb"
+elif [ -x "/Applications/Android Studio.app/Contents/jbr/Contents/Home/bin/adb" ]; then
+  ADB="/Applications/Android Studio.app/Contents/jbr/Contents/Home/bin/adb"
+fi
+if [ -z "$ADB" ]; then
   echo "❌ 找不到 adb。请先安装 Android Platform Tools。"
   echo "   macOS:  brew install android-platform-tools"
+  echo "   或者直接解压 platform-tools 到 ~/adb-tools/ 并把 adb 加到 PATH"
   echo "   Win/Linux: https://developer.android.com/tools/releases/platform-tools"
   exit 1
 fi
+echo "  找到 adb: $ADB"
+echo "  版本: $($ADB --version | head -1)"
 
 echo "[2/4] 检查设备连接 ..."
-adb devices
-DEV_COUNT=$(adb devices | grep -c -E "device$" || true)
+$ADB devices
+DEV_COUNT=$($ADB devices | grep -c -E "device$" || true)
 if [ "$DEV_COUNT" -lt 1 ]; then
   echo "❌ 没有可用设备。"
   echo "   请确认 USB 调试已开启，并允许此电脑调试。"
@@ -38,14 +50,14 @@ if [ "$DEV_COUNT" -lt 1 ]; then
 fi
 
 echo "[3/4] 清空 logcat buffer ..."
-adb logcat -c
+$ADB logcat -c
 
 echo "[4/4] 开始抓取日志。手机端现在可以触发崩溃 ..."
 echo "      按 Ctrl+C 结束抓取。"
 echo ""
 
 # 抓 AndroidRuntime + CrashReporter + system_server 等关键 tag
-adb logcat \
+$ADB logcat \
   AndroidRuntime:E \
   CrashReporter:V \
   "*:F" \
