@@ -90,9 +90,11 @@ class FloatingWindowService : Service() {
         textView = floatingView.findViewById(R.id.floating_text)
         progress = floatingView.findViewById(R.id.floating_progress)
 
-        val (savedX, savedY, savedW, savedH) = prefs.getFloatingPosition().let {
-            arrayOf(it[0], it[1], it[2], it[3])
-        }
+        val savedPos = prefs.getFloatingPosition()
+        val savedX = savedPos[0]
+        val savedY = savedPos[1]
+        val savedW = savedPos[2]
+        val savedH = savedPos[3]
 
         layoutParams = WindowManager.LayoutParams().apply {
             width = if (savedW > 0) savedW else (screenW * 0.9).toInt()
