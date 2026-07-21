@@ -24,13 +24,13 @@ android {
             // keystore.properties 由 CI 生成；本地无文件时跳过（用 debug 签名）
             val keystorePropsFile = rootProject.file("keystore.properties")
             if (keystorePropsFile.exists()) {
-                val props = java.util.Properties().apply {
-                    load(keystorePropsFile.inputStream())
+                val props = loadKeystoreProps(keystorePropsFile)
+                if (props != null) {
+                    storeFile = file(props["storeFile"]!!)
+                    storePassword = props["storePassword"]
+                    keyAlias = props["keyAlias"]
+                    keyPassword = props["keyPassword"]
                 }
-                storeFile = file(props.getProperty("storeFile"))
-                storePassword = props.getProperty("storePassword")
-                keyAlias = props.getProperty("keyAlias")
-                keyPassword = props.getProperty("keyPassword")
             }
         }
     }
@@ -58,6 +58,8 @@ android {
         sourceCompatibility = JavaVersion.VERSION_17
         targetCompatibility = JavaVersion.VERSION_17
     }
+    // Kotlin 编译选项（新版推荐 compilerOptions，但保留兼容写法）
+    @Suppress("DEPRECATION")
     kotlinOptions {
         jvmTarget = "17"
     }
@@ -113,4 +115,20 @@ dependencies {
     implementation("com.squareup.moshi:moshi-kotlin:1.15.1")
 
     debugImplementation("androidx.compose.ui:ui-tooling")
+}
+
+/**
+ * 读取 keystore.properties 为 Map<String, String?>
+ * 用顶层函数（不在 Android{} 里）避免 DSL 解析问题
+ */
+fun loadKeystoreProps(file: java.io.File): Map<String, String?>? {
+    if (!file.exists()) return null
+    val props = java.util.Properties()
+    file.inputStream().use { props.load(it) }
+    return mapOf(
+        "storeFile" to props.getProperty("storeFile"),
+        "storePassword" to props.getProperty("storePassword"),
+        "keyAlias" to props.getProperty("keyAlias"),
+        "keyPassword" to props.getProperty("keyPassword")
+    )
 }
