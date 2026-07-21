@@ -8,8 +8,9 @@
 /captures
 .externalNativeBuild
 .cxx
-*.apk
-*.aab
+
+# 注：dist/ 不在这里 ignore — CI 会用 git add 强制提交
+# *.apk / *.aab 也不 ignore，CI 推到 dist/ 时需要
 
 # ===== Keystore / Secrets（绝对不要提交）=====
 release.jks
