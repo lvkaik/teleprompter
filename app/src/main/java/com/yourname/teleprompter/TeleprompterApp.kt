@@ -13,9 +13,10 @@ import dagger.hilt.android.HiltAndroidApp
 class TeleprompterApp : Application() {
 
     override fun onCreate() {
-        super.onCreate()
-        // 必须在所有业务初始化之前：捕获后续任意线程的崩溃
+        // 注意：CrashReporter.install 必须放在 super.onCreate() 之前，
+        // 否则 Hilt 在 super 中构造 component 时如果崩，handler 还没装上。
         CrashReporter.install(this)
+        super.onCreate()
         createNotificationChannels()
         // 在主线程上弹 Toast 提示上次崩溃（不影响冷启动）
         Handler(Looper.getMainLooper()).post {

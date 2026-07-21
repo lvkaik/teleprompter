@@ -14,12 +14,15 @@ import java.util.Locale
  * 全局未捕获异常拦截器。
  *
  * 行为：
- * - 捕获所有未捕获的异常
+ * - 捕获所有未捕获的 Java/Kotlin 异常
  * - 把堆栈、线程、版本号写入 `cacheDir/crash.log`
  * - **仍然调用系统 default handler**，所以闪退行为不变（不会出现"卡死"假象）
  * - 下次启动时由 [showLastCrashToast] 在前台弹一条 Toast，并把内容打到 logcat
  *
  * 设计目的：把崩溃信息从 ColorOS 的"三方应用异常"提示里抢出来，变成可读文本。
+ *
+ * 注意：**只能捕获 Java 层崩溃**。native crash (SIGSEGV/SIGKILL)、
+ * Application 类加载失败、Zygote 阶段被杀等抓不到。
  */
 object CrashReporter {
 
@@ -28,23 +31,28 @@ object CrashReporter {
 
     @Volatile private var initialized = false
 
-    /** 由 Application.onCreate 调用。幂等。 */
+    /** 由 Application.onCreate 调用（尽早，最好在 super.onCreate 之前）。幂等。 */
     fun install(context: Context) {
         if (initialized) return
         initialized = true
 
-        val appCtx = context.applicationContext
-        val previous = Thread.getDefaultUncaughtExceptionHandler()
-        Thread.setDefaultUncaughtExceptionHandler { thread, throwable ->
-            try {
-                writeCrashToFile(appCtx, thread, throwable)
-            } catch (t: Throwable) {
-                Log.e(TAG, "写入崩溃日志失败", t)
+        try {
+            val appCtx = context.applicationContext
+            val previous = Thread.getDefaultUncaughtExceptionHandler()
+            Thread.setDefaultUncaughtExceptionHandler { thread, throwable ->
+                try {
+                    writeCrashToFile(appCtx, thread, throwable)
+                } catch (t: Throwable) {
+                    Log.e(TAG, "写入崩溃日志失败", t)
+                }
+                // 仍然交给系统 default handler，保持原本的"闪退"行为
+                previous?.uncaughtException(thread, throwable)
             }
-            // 仍然交给系统 default handler，保持原本的"闪退"行为
-            previous?.uncaughtException(thread, throwable)
+            Log.i(TAG, "CrashReporter 已安装")
+        } catch (t: Throwable) {
+            // 任何意外都不能阻止 App 启动
+            Log.e(TAG, "CrashReporter.install 出错", t)
         }
-        Log.i(TAG, "CrashReporter 已安装")
     }
 
     /**
@@ -53,27 +61,31 @@ object CrashReporter {
      * 没有崩溃文件时静默返回。
      */
     fun showLastCrashToast(context: Context) {
-        val appCtx = context.applicationContext
-        val file = File(appCtx.cacheDir, CRASH_FILE)
-        if (!file.exists() || file.length() == 0L) return
-
-        val text = try {
-            file.readText()
-        } catch (t: Throwable) {
-            Log.w(TAG, "读取 crash.log 失败", t)
-            return
-        }
-
-        // 打到 logcat（用户/开发者可以直接 logcat -s CrashReporter 抓）
-        Log.e(TAG, "=== 上次崩溃内容 ===\n$text\n=== end ===")
-
-        // 截前 200 字塞 Toast；太长了 Toast 会被截断
-        val firstLine = text.lineSequence().firstOrNull()?.take(120) ?: "上次崩溃"
         try {
-            Toast.makeText(appCtx, "上次崩溃: $firstLine", Toast.LENGTH_LONG).show()
+            val appCtx = context.applicationContext
+            val file = File(appCtx.cacheDir, CRASH_FILE)
+            if (!file.exists() || file.length() == 0L) return
+
+            val text = try {
+                file.readText()
+            } catch (t: Throwable) {
+                Log.w(TAG, "读取 crash.log 失败", t)
+                return
+            }
+
+            // 打到 logcat（用户/开发者可以直接 logcat -s CrashReporter 抓）
+            Log.e(TAG, "=== 上次崩溃内容 ===\n$text\n=== end ===")
+
+            // 截前 200 字塞 Toast；太长了 Toast 会被截断
+            val firstLine = text.lineSequence().firstOrNull()?.take(120) ?: "上次崩溃"
+            try {
+                Toast.makeText(appCtx, "上次崩溃: $firstLine", Toast.LENGTH_LONG).show()
+            } catch (t: Throwable) {
+                // Toast 在某些后台进程里可能失败，吞掉
+                Log.w(TAG, "Toast 显示失败", t)
+            }
         } catch (t: Throwable) {
-            // Toast 在某些后台进程里可能失败，吞掉
-            Log.w(TAG, "Toast 显示失败", t)
+            Log.e(TAG, "showLastCrashToast 出错", t)
         }
     }
 
