@@ -18,6 +18,7 @@ import android.view.MotionEvent
 import android.view.View
 import android.view.WindowInsets
 import android.view.WindowManager
+import android.widget.Button
 import android.widget.ImageButton
 import android.widget.ProgressBar
 import android.widget.ScrollView
@@ -54,12 +55,18 @@ class FloatingWindowService : Service() {
     private lateinit var scrollView: ScrollView
     private lateinit var textView: TextView
     private lateinit var progress: ProgressBar
+    private lateinit var btnPlay: ImageButton
+    private lateinit var speedLabel: TextView
+    private lateinit var modeLabel: TextView
 
     private val scope = CoroutineScope(SupervisorJob() + Dispatchers.Main)
     private var engineJob: Job? = null
 
     private var scroller: AutoScroller? = null
     private var speedPxPerSec: Float = 30f
+    private var playing: Boolean = false
+    private var contentSet: Boolean = false
+    private var autoPlay: Boolean = true
 
     // 拖动 / 缩放临时变量
     private var startRawX = 0f
@@ -89,6 +96,15 @@ class FloatingWindowService : Service() {
         scrollView = floatingView.findViewById(R.id.floating_scroll)
         textView = floatingView.findViewById(R.id.floating_text)
         progress = floatingView.findViewById(R.id.floating_progress)
+        btnPlay = floatingView.findViewById(R.id.btn_play_pause)
+        speedLabel = floatingView.findViewById(R.id.floating_speed_label)
+        modeLabel = floatingView.findViewById(R.id.floating_mode_label)
+
+        // 加载上次保存的速度
+        val savedSpeed = prefs.getSpeedPxPerSec()
+        if (savedSpeed > 0f) speedPxPerSec = savedSpeed
+        speedLabel.text = speedPxPerSec.toInt().toString()
+        modeLabel.text = getString(R.string.mode_constant)
 
         val savedPos = prefs.getFloatingPosition()
         val savedX = savedPos[0]
@@ -131,19 +147,36 @@ class FloatingWindowService : Service() {
     override fun onStartCommand(intent: Intent?, flags: Int, startId: Int): Int {
         when (intent?.action) {
             ACTION_STOP -> { stopSelf(); return START_NOT_STICKY }
-            ACTION_PAUSE -> scroller?.stop()
-            ACTION_RESUME -> scroller?.start()
+            ACTION_PAUSE -> {
+                if (playing) togglePlay()
+            }
+            ACTION_RESUME -> {
+                if (!playing && contentSet) togglePlay()
+            }
             else -> {
                 // 首次启动 / 普通刷新：注入文稿、字号、速度
                 val content = intent?.getStringExtra(EXTRA_SCRIPT_CONTENT)
                 if (!content.isNullOrEmpty()) {
-                    textView.text = content
+                    if (textView.text?.toString() != content) {
+                        textView.text = content
+                    }
+                    contentSet = true
                 }
                 if (intent != null && intent.hasExtra(EXTRA_FONT_SP)) {
                     textView.textSize = intent.getFloatExtra(EXTRA_FONT_SP, textView.textSize)
                 }
                 if (intent != null && intent.hasExtra(EXTRA_SPEED)) {
-                    speedPxPerSec = intent.getFloatExtra(EXTRA_SPEED, speedPxPerSec)
+                    val newSpeed = intent.getFloatExtra(EXTRA_SPEED, speedPxPerSec)
+                    if (newSpeed != speedPxPerSec) {
+                        speedPxPerSec = newSpeed
+                        speedLabel.text = speedPxPerSec.toInt().toString()
+                    }
+                }
+                // 首次注入或内容变了，自动开始播放
+                if (autoPlay && contentSet && !playing && !textView.text.isNullOrBlank()) {
+                    // ScrollView 内容布局需要一点时间，post 一下
+                    scrollView.post { togglePlay() }
+                    autoPlay = false // 只在第一次自动播放
                 }
             }
         }
@@ -317,14 +350,18 @@ class FloatingWindowService : Service() {
     }
 
     private fun setupButtons() {
-        val btnPlay = floatingView.findViewById<ImageButton>(R.id.btn_play_pause)
-        var playing = false
-        btnPlay.setOnClickListener {
-            if (playing) { scroller?.stop(); playing = false }
-            else { scroller?.start(); playing = true }
-        }
+        btnPlay.setOnClickListener { togglePlay() }
         val btnClose = floatingView.findViewById<ImageButton>(R.id.btn_close)
         btnClose.setOnClickListener { stopSelf() }
+
+        // 速度 ± 按钮
+        val btnSpeedDown = floatingView.findViewById<Button>(R.id.btn_speed_down)
+        val btnSpeedUp = floatingView.findViewById<Button>(R.id.btn_speed_up)
+        btnSpeedDown.setOnClickListener { changeSpeed(-SPEED_STEP) }
+        btnSpeedUp.setOnClickListener { changeSpeed(+SPEED_STEP) }
+        // 长按连续调速
+        btnSpeedDown.setOnLongClickListener { startSpeedRepeat(-SPEED_STEP); true }
+        btnSpeedUp.setOnLongClickListener { startSpeedRepeat(+SPEED_STEP); true }
 
         scrollView.viewTreeObserver.addOnScrollChangedListener {
             val sv = scrollView
@@ -332,6 +369,42 @@ class FloatingWindowService : Service() {
             val max = maxOf(1, child.height - sv.height)
             progress.progress = (sv.scrollY * 100 / max).coerceIn(0, 100)
         }
+    }
+
+    private fun togglePlay() {
+        if (playing) {
+            scroller?.stop()
+            playing = false
+            btnPlay.setImageResource(android.R.drawable.ic_media_play)
+        } else {
+            // 没有内容就不开始
+            if (textView.text.isNullOrBlank()) return
+            scroller?.start()
+            playing = true
+            btnPlay.setImageResource(android.R.drawable.ic_media_pause)
+        }
+    }
+
+    private fun changeSpeed(delta: Float) {
+        val newSpeed = (speedPxPerSec + delta).coerceIn(MIN_SPEED, MAX_SPEED)
+        if (newSpeed == speedPxPerSec) return
+        speedPxPerSec = newSpeed
+        speedLabel.text = speedPxPerSec.toInt().toString()
+        prefs.setSpeedPxPerSec(speedPxPerSec)
+    }
+
+    private val speedRepeatHandler = android.os.Handler(android.os.Looper.getMainLooper())
+    private var speedRepeatRunnable: Runnable? = null
+    private fun startSpeedRepeat(delta: Float) {
+        speedRepeatRunnable?.let { speedRepeatHandler.removeCallbacks(it) }
+        val r = object : Runnable {
+            override fun run() {
+                changeSpeed(delta)
+                speedRepeatHandler.postDelayed(this, 120)
+            }
+        }
+        speedRepeatRunnable = r
+        speedRepeatHandler.postDelayed(r, 400)
     }
 
     private fun computeScreenSize() {
@@ -374,6 +447,9 @@ class FloatingWindowService : Service() {
 
     companion object {
         private const val NOTI_ID = 1001
+        private const val SPEED_STEP = 5f
+        private const val MIN_SPEED = 1f
+        private const val MAX_SPEED = 200f
         const val ACTION_START = "com.yourname.teleprompter.action.START_FLOATING"
         const val ACTION_STOP = "com.yourname.teleprompter.action.STOP_FLOATING"
         const val ACTION_PAUSE = "com.yourname.teleprompter.action.PAUSE"

@@ -12,4 +12,6 @@
     <string name="permission_overlay_required">需要悬浮窗权限才能使用</string>
     <string name="permission_mic_required">需要麦克风权限才能使用 AI 提词</string>
     <string name="permission_battery_required">需要关闭电池优化以保证稳定运行</string>
+    <string name="mode_constant">匀速</string>
+    <string name="mode_ai">AI</string>
 </resources>

@@ -50,6 +50,10 @@ class SecurePrefs @Inject constructor(@ApplicationContext private val context: C
     fun setLastScriptId(id: String) = prefs.edit().putString(KEY_LAST_SCRIPT, id).apply()
     fun getLastScriptId(): String? = prefs.getString(KEY_LAST_SCRIPT, null)
 
+    fun setSpeedPxPerSec(speed: Float) =
+        prefs.edit().putFloat(KEY_SPEED_PX_PER_SEC, speed).apply()
+    fun getSpeedPxPerSec(): Float = prefs.getFloat(KEY_SPEED_PX_PER_SEC, 0f)
+
     /**
      * 尝试创建 EncryptedSharedPreferences。失败则删除损坏文件再试一次；
      * 再失败则降级为普通 prefs（明文，但仍可用）。
@@ -116,5 +120,6 @@ class SecurePrefs @Inject constructor(@ApplicationContext private val context: C
         private const val KEY_FLOAT_W = "float_w"
         private const val KEY_FLOAT_H = "float_h"
         private const val KEY_LAST_SCRIPT = "last_script_id"
+        private const val KEY_SPEED_PX_PER_SEC = "speed_px_per_sec"
     }
 }
