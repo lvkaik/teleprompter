@@ -1,9 +1,5 @@
 name: Build APK
 
-# 触发条件：
-# - push 到 main / develop
-# - 任何 Pull Request
-# - 手动触发（Actions 页面 → Run workflow）
 on:
   push:
     branches: [ main, develop, master ]
@@ -47,33 +43,28 @@ jobs:
           java-version: '17'
           distribution: 'temurin'
 
-      # ===== 3. 设置 Gradle 缓存（官方 action）=====
-      - name: Setup Gradle
+      # ===== 3. Android SDK（命令行版）=====
+      - name: Setup Android SDK
+        uses: android-actions/setup-android@v3
+
+      # ===== 3.5 安装 gradle 并生成 wrapper =====
+      - name: Install Gradle
         uses: gradle/actions/setup-gradle@v3
         with:
-          cache-read-only: ${{ github.ref != 'refs/heads/main' && github.ref != 'refs/heads/develop' }}
+          # 不使用 Gradle 内置缓存（避免 GitHub 缓存服务故障）
+          cache-disabled: true
 
-      # ===== 4. 给 Gradle 执行权限 =====
-      - name: Make gradlew executable
-        run: chmod +x ./gradlew
-
-      # ===== 5. 决定构建类型 =====
+      # ===== 4. 决定构建类型 =====
       - name: Determine build type
         id: buildtype
         run: |
           if [ "${{ github.event_name }}" = "workflow_dispatch" ]; then
             echo "type=${{ github.event.inputs.build_type }}" >> $GITHUB_OUTPUT
           else
-            # PR 或 push 默认 debug，避免 CI 误签 release
-            BRANCH="${{ github.ref_name }}"
-            if [ "$BRANCH" = "main" ] || [ "$BRANCH" = "master" ]; then
-              echo "type=debug" >> $GITHUB_OUTPUT
-            else
-              echo "type=debug" >> $GITHUB_OUTPUT
-            fi
+            echo "type=debug" >> $GITHUB_OUTPUT
           fi
 
-      # ===== 6. 配置 release 签名（仅 release 构建需要）=====
+      # ===== 5. 配置 release 签名（仅 release 构建需要）=====
       - name: Decode release keystore
         if: steps.buildtype.outputs.type == 'release'
         env:
@@ -87,7 +78,7 @@ jobs:
           echo "$KEYSTORE_BASE64" | base64 -d > app/keystore/release.jks
           ls -la app/keystore/release.jks
 
-      # ===== 7. 写入签名属性（仅 release）=====
+      # ===== 6. 写入签名属性（仅 release）=====
       - name: Write keystore.properties
         if: steps.buildtype.outputs.type == 'release'
         env:
@@ -101,16 +92,31 @@ jobs:
           keyAlias=${KEY_ALIAS}
           keyPassword=${KEY_PASSWORD}
           EOF
-          cat keystore.properties
 
-      # ===== 8. 编译 =====
+      # ===== 7. 给 Gradle 执行权限 =====
+      - name: Generate gradle wrapper if missing
+        run: |
+          if [ ! -f ./gradlew ]; then
+            echo "gradlew 不存在，用裸 gradle 生成 wrapper"
+            gradle wrapper --gradle-version 8.9
+          fi
+          chmod +x ./gradlew
+          ls -la ./gradlew gradle/wrapper/
+
+      # ===== 8. 编译（最朴素的写法，不再依赖任何第三方 Gradle action）=====
       - name: Run ${{ steps.buildtype.outputs.type }} build
         run: |
           if [ "${{ steps.buildtype.outputs.type }}" = "release" ]; then
             ./gradlew assembleRelease \
+              --no-daemon \
+              --no-build-cache \
+              --no-configuration-cache \
               -Pandroid.injected.signing.store.file=keystore/release.jks
           else
-            ./gradlew assembleDebug
+            ./gradlew assembleDebug \
+              --no-daemon \
+              --no-build-cache \
+              --no-configuration-cache
           fi
 
       # ===== 9. 验证 APK 产出 =====
@@ -118,10 +124,10 @@ jobs:
         run: |
           echo "===== 产出列表 ====="
           find app/build/outputs/apk -name "*.apk" -exec ls -lh {} \;
-          echo "===== APK 内容快查 ====="
+          echo ""
           APK=$(find app/build/outputs/apk -name "*.apk" | head -1)
           if [ -n "$APK" ]; then
-            unzip -l "$APK" | head -20
+            echo "===== APK badging ====="
             $ANDROID_HOME/build-tools/*/aapt dump badging "$APK" 2>/dev/null | head -5 || true
           fi
 
