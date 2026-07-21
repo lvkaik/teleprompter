@@ -103,8 +103,9 @@ dependencies {
     implementation("com.google.dagger:hilt-android:2.52")
     ksp("com.google.dagger:hilt-compiler:2.52")
     implementation("androidx.hilt:hilt-navigation-compose:1.2.0")
-    implementation("androidx.hilt:hilt-work:1.2.0")
-    ksp("androidx.hilt:hilt-compiler:1.2.0")
+    // 不引入 hilt-work / work-runtime：本项目未使用 @HiltWorker / Worker。
+    // 否则 WorkManager 会通过 ContentProvider 自动初始化，在 Android 12+ 上
+    // 因 PendingIntent 缺 FLAG_IMMUTABLE 而崩溃（参见 force-stop 检查路径）。
 
     implementation("androidx.security:security-crypto:1.1.0-alpha06")
 
