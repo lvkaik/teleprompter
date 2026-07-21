@@ -47,12 +47,11 @@ jobs:
           java-version: '17'
           distribution: 'temurin'
 
-      # ===== 3. 设置 Gradle 缓存 =====
+      # ===== 3. 设置 Gradle 缓存（官方 action）=====
       - name: Setup Gradle
-        uses: gradle/actions/setup-gradle@v4
+        uses: gradle/actions/setup-gradle@v3
         with:
           cache-read-only: ${{ github.ref != 'refs/heads/main' && github.ref != 'refs/heads/develop' }}
-          gradle-home-cache-cleanup: true
 
       # ===== 4. 给 Gradle 执行权限 =====
       - name: Make gradlew executable
@@ -106,12 +105,13 @@ jobs:
 
       # ===== 8. 编译 =====
       - name: Run ${{ steps.buildtype.outputs.type }} build
-        uses: gradle/actions/run-gradle@v4
-        with:
-          arguments: |
-            ${{ steps.buildtype.outputs.type == 'release' && 'assembleRelease' || 'assembleDebug' }}
-            -Pandroid.injected.signing.store.file=${{ steps.buildtype.outputs.type == 'release' && 'keystore/release.jks' || '' }}
-          gradle-home-cache-cleanup: true
+        run: |
+          if [ "${{ steps.buildtype.outputs.type }}" = "release" ]; then
+            ./gradlew assembleRelease \
+              -Pandroid.injected.signing.store.file=keystore/release.jks
+          else
+            ./gradlew assembleDebug
+          fi
 
       # ===== 9. 验证 APK 产出 =====
       - name: Verify APK output
