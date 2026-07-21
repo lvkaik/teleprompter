@@ -1,0 +1,100 @@
+<?xml version="1.0" encoding="utf-8"?>
+<FrameLayout xmlns:android="http://schemas.android.com/apk/res/android"
+    android:layout_width="match_parent"
+    android:layout_height="match_parent"
+    android:background="@drawable/bg_floating">
+
+    <!-- 标题栏：长按拖动 -->
+    <LinearLayout
+        android:id="@+id/floating_title_bar"
+        android:layout_width="match_parent"
+        android:layout_height="40dp"
+        android:layout_gravity="top"
+        android:background="#33000000"
+        android:gravity="center_vertical"
+        android:orientation="horizontal"
+        android:paddingHorizontal="8dp">
+
+        <View
+            android:layout_width="0dp"
+            android:layout_height="1dp"
+            android:layout_weight="1"/>
+
+        <ImageButton
+            android:id="@+id/btn_play_pause"
+            android:layout_width="32dp"
+            android:layout_height="32dp"
+            android:background="?android:attr/selectableItemBackgroundBorderless"
+            android:contentDescription="播放/暂停"
+            android:src="@android:drawable/ic_media_play"/>
+
+        <ImageButton
+            android:id="@+id/btn_close"
+            android:layout_width="32dp"
+            android:layout_height="32dp"
+            android:background="?android:attr/selectableItemBackgroundBorderless"
+            android:contentDescription="关闭"
+            android:src="@android:drawable/ic_menu_close_clear_cancel"/>
+    </LinearLayout>
+
+    <!-- 文本区 -->
+    <ScrollView
+        android:id="@+id/floating_scroll"
+        android:layout_width="match_parent"
+        android:layout_height="match_parent"
+        android:layout_marginTop="40dp"
+        android:layout_marginBottom="40dp"
+        android:fadingEdge="vertical"
+        android:fadingEdgeLength="40dp"
+        android:requiresFadingEdge="vertical">
+
+        <TextView
+            android:id="@+id/floating_text"
+            android:layout_width="match_parent"
+            android:layout_height="wrap_content"
+            android:padding="16dp"
+            android:text="请先在主 App 中选择或编辑文稿..."
+            android:textColor="@color/white"
+            android:textSize="20sp"
+            android:lineSpacingExtra="6dp"/>
+    </ScrollView>
+
+    <!-- 底部进度条 -->
+    <ProgressBar
+        android:id="@+id/floating_progress"
+        style="?android:attr/progressBarStyleHorizontal"
+        android:layout_width="match_parent"
+        android:layout_height="3dp"
+        android:layout_gravity="bottom"
+        android:max="100"
+        android:progress="0"/>
+
+    <!-- 四角缩放手柄 -->
+    <View
+        android:id="@+id/handle_top_left"
+        android:layout_width="24dp"
+        android:layout_height="24dp"
+        android:layout_gravity="top|start"
+        android:background="@drawable/bg_handle"/>
+
+    <View
+        android:id="@+id/handle_top_right"
+        android:layout_width="24dp"
+        android:layout_height="24dp"
+        android:layout_gravity="top|end"
+        android:background="@drawable/bg_handle"/>
+
+    <View
+        android:id="@+id/handle_bottom_left"
+        android:layout_width="24dp"
+        android:layout_height="24dp"
+        android:layout_gravity="bottom|start"
+        android:background="@drawable/bg_handle"/>
+
+    <View
+        android:id="@+id/handle_bottom_right"
+        android:layout_width="24dp"
+        android:layout_height="24dp"
+        android:layout_gravity="bottom|end"
+        android:background="@drawable/bg_handle"/>
+</FrameLayout>

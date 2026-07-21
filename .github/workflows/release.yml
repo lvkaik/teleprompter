@@ -1,0 +1,142 @@
+name: Release
+
+# 仅手动触发（Actions 页面 → Run workflow → 输入版本号）
+on:
+  workflow_dispatch:
+    inputs:
+      version_name:
+        description: '版本号（如 1.0.0）'
+        required: true
+        type: string
+      version_code:
+        description: 'versionCode（如 1）'
+        required: true
+        type: string
+      prerelease:
+        description: '标记为预发布版本'
+        required: false
+        type: boolean
+        default: false
+
+permissions:
+  contents: write   # 创建 release 需要写权限
+
+jobs:
+  release:
+    name: Build & Publish Release
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+          token: ${{ secrets.GITHUB_TOKEN }}
+
+      - name: Set up JDK 17
+        uses: actions/setup-java@v4
+        with:
+          java-version: '17'
+          distribution: 'temurin'
+
+      - name: Setup Gradle
+        uses: gradle/actions/setup-gradle@v4
+        with:
+          gradle-home-cache-cleanup: true
+
+      - name: Make gradlew executable
+        run: chmod +x ./gradlew
+
+      # ===== 校验密钥存在 =====
+      - name: Validate signing secrets
+        env:
+          KEYSTORE_BASE64: ${{ secrets.RELEASE_KEYSTORE_BASE64 }}
+          KEYSTORE_PASSWORD: ${{ secrets.RELEASE_KEYSTORE_PASSWORD }}
+          KEY_ALIAS: ${{ secrets.RELEASE_KEY_ALIAS }}
+          KEY_PASSWORD: ${{ secrets.RELEASE_KEY_PASSWORD }}
+        run: |
+          if [ -z "$KEYSTORE_BASE64" ] || [ -z "$KEYSTORE_PASSWORD" ] || \
+             [ -z "$KEY_ALIAS" ] || [ -z "$KEY_PASSWORD" ]; then
+            echo "::error::缺少必要的 secrets，请按 docs/04-CI使用指南.md 配置"
+            exit 1
+          fi
+
+      # ===== 解码 keystore =====
+      - name: Decode keystore
+        env:
+          KEYSTORE_BASE64: ${{ secrets.RELEASE_KEYSTORE_BASE64 }}
+        run: |
+          mkdir -p keystore
+          echo "$KEYSTORE_BASE64" | base64 -d > keystore/release.jks
+          ls -la keystore/release.jks
+
+      # ===== 写入签名属性 =====
+      - name: Write keystore.properties
+        env:
+          KEYSTORE_PASSWORD: ${{ secrets.RELEASE_KEYSTORE_PASSWORD }}
+          KEY_ALIAS: ${{ secrets.RELEASE_KEY_ALIAS }}
+          KEY_PASSWORD: ${{ secrets.RELEASE_KEY_PASSWORD }}
+        run: |
+          cat > keystore.properties <<EOF
+          storeFile=../keystore/release.jks
+          storePassword=${KEYSTORE_PASSWORD}
+          keyAlias=${KEY_ALIAS}
+          keyPassword=${KEY_PASSWORD}
+          EOF
+
+      # ===== 修改版本号 =====
+      - name: Bump version
+        run: |
+          VERSION_NAME="${{ github.event.inputs.version_name }}"
+          VERSION_CODE="${{ github.event.inputs.version_code }}"
+          echo "Version: $VERSION_NAME ($VERSION_CODE)"
+          # 简单 sed 替换（Gradle 里可以读 CI 环境变量更优雅，这里给出两种方式任选）
+          # 方式 A：修改 build.gradle.kts
+          sed -i.bak "s/versionName = \".*\"/versionName = \"$VERSION_NAME\"/" app/build.gradle.kts
+          sed -i.bak "s/versionCode = .*/versionCode = $VERSION_CODE/" app/build.gradle.kts
+          grep -E 'version(Name|Code)' app/build.gradle.kts
+
+      # ===== 构建 release APK =====
+      - name: Build release APK
+        run: ./gradlew assembleRelease
+
+      # ===== 构建 AAB（Google Play 用）=====
+      - name: Build release AAB
+        run: ./gradlew bundleRelease
+
+      # ===== 校验产物 =====
+      - name: Verify outputs
+        run: |
+          echo "===== APK ====="
+          ls -lh app/build/outputs/apk/release/*.apk
+          echo "===== AAB ====="
+          ls -lh app/build/outputs/bundle/release/*.aab
+
+      # ===== 创建 GitHub Release =====
+      - name: Create GitHub Release
+        uses: softprops/action-gh-release@v2
+        with:
+          tag_name: v${{ github.event.inputs.version_name }}
+          name: 悬浮提词器 v${{ github.event.inputs.version_name }}
+          body: |
+            ## 悬浮提词器 v${{ github.event.inputs.version_name }}
+
+            ### 📦 包含文件
+            - `app-release.apk` — 直接安装
+            - `app-release.aab` — Google Play 上架
+
+            ### ✨ 本版本更新
+            - 见 commit history
+
+            ### 📱 兼容性
+            - Android 9.0 - 16
+            - 主力测试：realme GT7 Pro / realme UI 7.0
+          prerelease: ${{ github.event.inputs.prerelease }}
+          draft: false
+          files: |
+            app/build/outputs/apk/release/*.apk
+            app/build/outputs/bundle/release/*.aab
+          generate_release_notes: true
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}

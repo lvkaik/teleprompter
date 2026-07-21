@@ -1,0 +1,15 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <string name="app_name">悬浮提词器</string>
+    <string name="noti_channel_floating">悬浮提词</string>
+    <string name="noti_channel_floating_desc">保持提词器在后台运行</string>
+    <string name="noti_title_running">提词器运行中</string>
+    <string name="noti_text_running">点击右侧停止</string>
+    <string name="action_stop">停止</string>
+    <string name="action_start">启动悬浮窗</string>
+    <string name="action_settings">设置</string>
+    <string name="action_keep_alive">后台保活设置</string>
+    <string name="permission_overlay_required">需要悬浮窗权限才能使用</string>
+    <string name="permission_mic_required">需要麦克风权限才能使用 AI 提词</string>
+    <string name="permission_battery_required">需要关闭电池优化以保证稳定运行</string>
+</resources>

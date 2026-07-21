@@ -1,0 +1,27 @@
+# ===== Android / Gradle =====
+*.iml
+.gradle
+/local.properties
+/.idea/
+.DS_Store
+/build
+/captures
+.externalNativeBuild
+.cxx
+*.apk
+*.aab
+
+# ===== Keystore / Secrets（绝对不要提交）=====
+release.jks
+*.jks
+*.keystore
+keystore.properties
+keystore-base64.txt
+
+# ===== App 用户私有数据（开发期）=====
+/local.properties
+/app/google-services.json
+
+# ===== 系统 =====
+.DS_Store
+Thumbs.db
