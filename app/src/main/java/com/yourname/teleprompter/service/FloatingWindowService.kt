@@ -151,41 +151,80 @@ class FloatingWindowService : Service() {
     }
 
     private fun startForegroundCompat() {
-        val channelId = TeleprompterApp.CHANNEL_FLOATING
-        val mgr = getSystemService(NotificationManager::class.java)
-        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.O && mgr.getNotificationChannel(channelId) == null) {
-            mgr.createNotificationChannel(
-                NotificationChannel(channelId, getString(R.string.noti_channel_floating),
-                    NotificationManager.IMPORTANCE_LOW)
+        try {
+            val channelId = TeleprompterApp.CHANNEL_FLOATING
+            val mgr = getSystemService(NotificationManager::class.java)
+            if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.O && mgr.getNotificationChannel(channelId) == null) {
+                mgr.createNotificationChannel(
+                    NotificationChannel(channelId, getString(R.string.noti_channel_floating),
+                        NotificationManager.IMPORTANCE_LOW)
+                )
+            }
+            val openIntent = PendingIntent.getActivity(
+                this, 0, Intent(this, MainActivity::class.java),
+                PendingIntent.FLAG_IMMUTABLE
             )
+            val stopIntent = PendingIntent.getService(
+                this, 1, Intent(this, FloatingWindowService::class.java).apply { action = ACTION_STOP },
+                PendingIntent.FLAG_IMMUTABLE
+            )
+            val notif: Notification = NotificationCompat.Builder(this, channelId)
+                .setSmallIcon(R.drawable.ic_prompter)
+                .setContentTitle(getString(R.string.noti_title_running))
+                .setContentText(getString(R.string.noti_text_running))
+                .setContentIntent(openIntent)
+                .setOngoing(true)
+                .setPriority(NotificationCompat.PRIORITY_LOW)
+                .addAction(R.drawable.ic_stop, getString(R.string.action_stop), stopIntent)
+                .build()
+
+            // 仅当 RECORD_AUDIO 已授权时才声明 microphone FGS type；
+            // 否则只用 specialUse。避免 Android 14+ 上因权限缺失导致 SecurityException。
+            val micGranted = checkSelfPermission(android.Manifest.permission.RECORD_AUDIO) ==
+                    android.content.pm.PackageManager.PERMISSION_GRANTED
+
+            if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.UPSIDE_DOWN_CAKE) {
+                val type = if (micGranted) {
+                    ServiceInfo.FOREGROUND_SERVICE_TYPE_MICROPHONE or
+                            ServiceInfo.FOREGROUND_SERVICE_TYPE_SPECIAL_USE
+                } else {
+                    ServiceInfo.FOREGROUND_SERVICE_TYPE_SPECIAL_USE
+                }
+                startForeground(NOTI_ID, notif, type)
+            } else {
+                startForeground(NOTI_ID, notif)
+            }
+        } catch (e: Throwable) {
+            // 任何 SecurityException / RemoteException 都不能让 onCreate 整个崩。
+            // 退化为只用 specialUse 再试一次（仅 Android 14+）。
+            android.util.Log.e("FloatingWindowService", "startForeground 失败，尝试降级", e)
+            try {
+                if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.UPSIDE_DOWN_CAKE) {
+                    startForeground(
+                        NOTI_ID, buildFallbackNotification(),
+                        ServiceInfo.FOREGROUND_SERVICE_TYPE_SPECIAL_USE
+                    )
+                }
+            } catch (e2: Throwable) {
+                android.util.Log.e("FloatingWindowService", "降级也失败，停止服务", e2)
+                stopSelf()
+            }
         }
+    }
+
+    private fun buildFallbackNotification(): Notification {
         val openIntent = PendingIntent.getActivity(
             this, 0, Intent(this, MainActivity::class.java),
             PendingIntent.FLAG_IMMUTABLE
         )
-        val stopIntent = PendingIntent.getService(
-            this, 1, Intent(this, FloatingWindowService::class.java).apply { action = ACTION_STOP },
-            PendingIntent.FLAG_IMMUTABLE
-        )
-        val notif: Notification = NotificationCompat.Builder(this, channelId)
+        return NotificationCompat.Builder(this, TeleprompterApp.CHANNEL_FLOATING)
             .setSmallIcon(R.drawable.ic_prompter)
             .setContentTitle(getString(R.string.noti_title_running))
             .setContentText(getString(R.string.noti_text_running))
             .setContentIntent(openIntent)
             .setOngoing(true)
             .setPriority(NotificationCompat.PRIORITY_LOW)
-            .addAction(R.drawable.ic_stop, getString(R.string.action_stop), stopIntent)
             .build()
-
-        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.UPSIDE_DOWN_CAKE) {
-            startForeground(
-                NOTI_ID, notif,
-                ServiceInfo.FOREGROUND_SERVICE_TYPE_MICROPHONE or
-                ServiceInfo.FOREGROUND_SERVICE_TYPE_SPECIAL_USE
-            )
-        } else {
-            startForeground(NOTI_ID, notif)
-        }
     }
 
     @SuppressLint("ClickableViewAccessibility")

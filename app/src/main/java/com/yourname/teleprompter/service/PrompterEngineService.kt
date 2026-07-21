@@ -94,27 +94,37 @@ class PrompterEngineService : Service() {
     }
 
     private fun startForegroundCompat() {
-        val channelId = TeleprompterApp.CHANNEL_FLOATING
-        val openIntent = PendingIntent.getActivity(
-            this, 0, Intent(this, MainActivity::class.java),
-            PendingIntent.FLAG_IMMUTABLE
-        )
-        val notif: Notification = NotificationCompat.Builder(this, channelId)
-            .setSmallIcon(R.drawable.ic_prompter)
-            .setContentTitle("AI 提词引擎运行中")
-            .setContentText("正在监听语音")
-            .setContentIntent(openIntent)
-            .setOngoing(true)
-            .setPriority(NotificationCompat.PRIORITY_LOW)
-            .build()
-
-        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.UPSIDE_DOWN_CAKE) {
-            startForeground(
-                NOTI_ID, notif,
-                ServiceInfo.FOREGROUND_SERVICE_TYPE_MICROPHONE
+        try {
+            val channelId = TeleprompterApp.CHANNEL_FLOATING
+            val openIntent = PendingIntent.getActivity(
+                this, 0, Intent(this, MainActivity::class.java),
+                PendingIntent.FLAG_IMMUTABLE
             )
-        } else {
-            startForeground(NOTI_ID, notif)
+            val notif: Notification = NotificationCompat.Builder(this, channelId)
+                .setSmallIcon(R.drawable.ic_prompter)
+                .setContentTitle("AI 提词引擎运行中")
+                .setContentText("正在监听语音")
+                .setContentIntent(openIntent)
+                .setOngoing(true)
+                .setPriority(NotificationCompat.PRIORITY_LOW)
+                .build()
+
+            val micGranted = checkSelfPermission(android.Manifest.permission.RECORD_AUDIO) ==
+                    android.content.pm.PackageManager.PERMISSION_GRANTED
+
+            if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.UPSIDE_DOWN_CAKE) {
+                if (micGranted) {
+                    startForeground(NOTI_ID, notif, ServiceInfo.FOREGROUND_SERVICE_TYPE_MICROPHONE)
+                } else {
+                    Log.w(TAG, "缺少 RECORD_AUDIO 权限，AI 提词引擎无法启动麦克风 FGS，停止服务")
+                    stopSelf()
+                }
+            } else {
+                startForeground(NOTI_ID, notif)
+            }
+        } catch (e: Throwable) {
+            Log.e(TAG, "startForegroundCompat 失败，停止服务", e)
+            stopSelf()
         }
     }
 
