@@ -119,16 +119,28 @@ dependencies {
 
 /**
  * 读取 keystore.properties 为 Map<String, String?>
- * 用顶层函数（不在 Android{} 里）避免 DSL 解析问题
+ * 用最朴素的字符串解析，避开 Gradle DSL 对 java.util.* 的限制
  */
 fun loadKeystoreProps(file: java.io.File): Map<String, String?>? {
     if (!file.exists()) return null
-    val props = java.util.Properties()
-    file.inputStream().use { props.load(it) }
+    val result = mutableMapOf<String, String?>()
+    file.bufferedReader().useLines { lines ->
+        lines.forEach { line ->
+            val trimmed = line.trim()
+            // 跳过空行和注释
+            if (trimmed.isEmpty() || trimmed.startsWith("#")) return@forEach
+            val eqIdx = trimmed.indexOf('=')
+            if (eqIdx > 0) {
+                val key = trimmed.substring(0, eqIdx).trim()
+                val value = trimmed.substring(eqIdx + 1).trim()
+                result[key] = value
+            }
+        }
+    }
     return mapOf(
-        "storeFile" to props.getProperty("storeFile"),
-        "storePassword" to props.getProperty("storePassword"),
-        "keyAlias" to props.getProperty("keyAlias"),
-        "keyPassword" to props.getProperty("keyPassword")
+        "storeFile" to result["storeFile"],
+        "storePassword" to result["storePassword"],
+        "keyAlias" to result["keyAlias"],
+        "keyPassword" to result["keyPassword"]
     )
 }
