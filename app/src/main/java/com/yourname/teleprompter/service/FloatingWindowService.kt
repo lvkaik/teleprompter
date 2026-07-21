@@ -122,12 +122,12 @@ class FloatingWindowService : Service() {
         setupResizeHandles()
         setupButtons()
 
-        // 默认文稿（由外部通过 Intent 注入）
-        intent?.getStringExtra(EXTRA_SCRIPT_CONTENT)?.let { textView.text = it }
-        intent?.getFloatExtra(EXTRA_FONT_SP, 22f)?.let {
+        // 默认文稿（由外部通过 Intent 注入）。显式 getIntent() 避开属性歧义。
+        getIntent()?.getStringExtra(EXTRA_SCRIPT_CONTENT)?.let { textView.text = it }
+        getIntent()?.getFloatExtra(EXTRA_FONT_SP, 22f)?.let {
             textView.textSize = it
         }
-        intent?.getFloatExtra(EXTRA_SPEED, 30f)?.let { speedPxPerSec = it }
+        getIntent()?.getFloatExtra(EXTRA_SPEED, 30f)?.let { speedPxPerSec = it }
 
         scroller = AutoScroller(scrollView) { speedPxPerSec }
     }
